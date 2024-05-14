@@ -1,0 +1,588 @@
+---
+title: "`r params$skolnamn`"
+author: "Läsåret `r params$läsår`"
+params:
+  skolnamn: "Almby skola F-9"
+  kommun: "Örebro kommun"
+  läsår: "2020/2021"
+date: "Framtaget av"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+header-includes:
+  - \usepackage{titling}
+  - \usepackage{fontspec}
+  - \pretitle{\begin{center}\fontsize{40}{48}\selectfont\fontspec{LeagueSpartan-Bold.ttf}\textbf}
+  - \posttitle{\end{center}}
+  - \preauthor{\begin{center}\large}
+  - \postauthor{\end{center}}
+  - \predate{\begin{center}\large}
+  - \postdate{\end{center}\begin{center}\centering\includegraphics[width=1in,height=1in]{sweco_black.png}\end{center}}
+  - \usepackage{fancyhdr} #fancyhdr moves the page number to bottom. Removes header, which automatically pops up.
+  - \pagestyle{fancy}
+  - \fancyhead{}
+  - \renewcommand{\headrulewidth}{0pt}
+  - \fancyfoot[C]{\thepage}
+  - \setlength\footskip{50pt}
+  - \usepackage{geometry}
+  - \geometry{top=1cm}
+font_family: 'Arial'
+titletext_fontfamily: 'Arial'  
+primary_colour: "#b8e6f2"
+accent_colour: "#90c4bd"
+sectitle2_textcol: "#cfd7b4"
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(reshape2)
+library(scales)
+library(gridExtra)
+library(data.table)
+
+# Läser in dataframes från Indata
+data_elevantal <- readxl::read_excel("YOUR_PATH_FILE")
+data_socek_ind <- readxl::read_excel("YOUR_PATH_FILE")
+data_franvaro <- readxl::read_excel("YOUR_PATH_FILE")
+data_personal <- readxl::read_excel("YOUR_PATH_FILE")
+data_elevnojdhet <- readxl::read_excel("YOUR_PATH_FILE")
+data_lasforst <- readxl::read_excel("YOUR_PATH_FILE")
+data_ak_6_np <- readxl::read_excel("YOUR_PATH_FILE")
+data_ak_9_np <- readxl::read_excel("YOUR_PATH_FILE")
+data_ak_3_np <- readxl::read_excel("YOUR_PATH_FILE")
+
+
+
+färger <- c("#90c4bd", "#b8e6f2", "#cfd7b4", "#f8dabd", '#C0362C', '#a85cc4')
+färg1 <- "#90c4bd"
+färg2 <- "#b8e6f2"
+färg3 <- "#cfd7b4"
+färg4 <- "#f8dabd"
+färg5 <- "#C0362C"
+färg6 <- "#a85cc4"
+
+```
+
+```{r intro, echo = F, message = F, warning=F}
+
+#skapar variabel för totalt antal elever till texten
+total_elever <- as.numeric(data_elevantal$e_totalt[data_elevantal$skolnamn == params$skolnamn])
+
+#skapar ord beskrivning av skolans klasser 
+start = NA
+end = NA
+if(data_elevantal$andel_e_f_3[data_elevantal$skolnamn == params$skolnamn] > 0.05){
+  start <- "F"
+  end <- "3"
+}else{start <- "4"}
+if(data_elevantal$andel_e_4_6[data_elevantal$skolnamn == params$skolnamn] > 0.05){
+  end <- "6"} 
+if(data_elevantal$andel_e_7_9[data_elevantal$skolnamn == params$skolnamn] > 0.05){
+  end <- "9"}
+if(data_elevantal$andel_e_4_6[data_elevantal$skolnamn == params$skolnamn] < 0.05 & 
+   data_elevantal$andel_e_f_3[data_elevantal$skolnamn == params$skolnamn] < 0.05){
+  start <- "7"}
+if(data_elevantal$andel_e_6_9[data_elevantal$skolnamn == params$skolnamn] == 1 & data_elevantal$andel_e_7_9[data_elevantal$skolnamn == params$skolnamn] < 1){
+  start <- "6"
+  end <- "9"}
+
+```
+
+`r params$skolnamn` är en `r paste(start, end, sep = "-")` `r if(data_franvaro$huvudman[data_franvaro$skolnamn == params$skolnamn] == "Enskild"){paste("friskola")}else{paste("kommunal skola")}` i `r params$kommun` `r if(!is.na(total_elever)){paste(" med totalt", total_elever, "elever", sep = " ")}`.
+
+```{r elevantal, echo = F, message = F, warning=F, results="asis"}
+if(!is.na(data_elevantal$e_totalt[data_elevantal$skolnamn == params$skolnamn])  & !is.na(data_elevantal$e_f_3[data_elevantal$skolnamn == params$skolnamn]) & !is.na(data_elevantal$e_4_6[data_elevantal$skolnamn == params$skolnamn]) & !is.na(data_elevantal$e_7_9[data_elevantal$skolnamn == params$skolnamn])){
+  cat("## Antal elever")
+
+#elevantal figur
+fig_elevantal <- data_elevantal %>%
+  filter(skolnamn %in% params$skolnamn)  %>%
+    select(skolnamn, starts_with('e')) %>% 
+  dplyr::rename("Skolnamn" = skolnamn, "Åkskurs F-3" = e_f_3, "Åkskurs 4-6" = e_4_6, "Åkskurs 7-9" = e_7_9, "Totalt" = e_totalt) %>% 
+   kable() %>%
+   row_spec(0, bold = TRUE, color = "black")
+
+print(fig_elevantal)
+}
+```
+
+```{r socek index, echo = F, message = F, warning=F, results="asis"}
+#skapar socioekonomiskt index för skolan, aktuellt år och föregående år
+
+socek_skola_nuv <- round(data_socek_ind$index_2022[data_socek_ind$skolnamn == params$skolnamn], 2)
+socek_skola_fore <- round(data_socek_ind$index_2021[data_socek_ind$skolnamn == params$skolnamn], 2)
+
+#kommunsnitt nuvarande år
+socek_kommun_nuv <- round(mean(data_socek_ind$index_2022[!is.na(data_socek_ind$index_2022)]), 2)
+
+#skapar ord beskrivning hur socioekonomiskt index har förändrats
+förändring <- NA
+if(socek_skola_nuv < socek_skola_fore){
+  förändring <- "en minskning"
+} else if(socek_skola_nuv > socek_skola_fore){
+  förändring <- "en ökning" 
+} else{ förändring <- "oförändrat"}
+
+#skapar ord om relation till kommunsnitt
+relation <- NA
+if(socek_skola_nuv < socek_kommun_nuv){
+  relation <- "under"
+} else if(socek_skola_nuv > socek_kommun_nuv){
+  relation <- "över" 
+} else{ relation <- "på samma nivå som"}
+
+if(!is.na(socek_skola_nuv)){
+  cat("## Socioekonomiskt index")
+}
+```
+
+`r if(!is.na(socek_skola_nuv)){paste("Skolans socioekonomiska index för läsåret",params$läsår,"var", socek_skola_nuv,", vilket är",relation,"kommunsnittet på",socek_kommun_nuv,sep = " ")}`.`r if(!is.na(socek_skola_fore) & !is.na(socek_skola_nuv)){paste(" Jämfört med föregående läsår är det",förändring,"då motsvarande siffra var", socek_skola_fore, sep = " ")}`.
+
+`r if(!is.na(socek_skola_nuv)){paste("Indexet beskriver andelen elever som inte förväntas nå behörighet till gymnasieskolans nationella program. 100 motsvarar genomsnittet i Sverige. Det beräknas av Skolverket och ligger till grund för likvärdighetsbidraget.")}`
+
+```{r kod till text franvaro, echo=FALSE, message = F, warning=F, results="asis"}
+
+#skapa total frånvaro
+franvaro_skola <- round(data_franvaro$frånvaro_tot[data_franvaro$skolnamn == params$skolnamn], 2)
+
+#skapa kommunens frånvaro
+franvaro_kommun <- round(mean(data_franvaro$frånvaro_tot[!is.na(data_franvaro$frånvaro_tot)]), 2)
+
+if(!is.na(data_franvaro$frånvaro_tot[data_franvaro$skolnamn == params$skolnamn])){
+  cat("## Frånvaro")
+}
+
+```
+
+`r if(!is.na(data_franvaro$frånvaro_tot[data_franvaro$skolnamn == params$skolnamn])){paste("Elevernas frånvaro i",params$skolnamn,"uppgick under läsåret",params$läsår,"till",franvaro_skola,"procent. I",params$kommun,"uppgick frånvaron till",franvaro_kommun,"procent.",sep=" ")}`
+
+```{r personalstat, echo=FALSE, message = F, warning=F, results="asis"}
+personal_besk <- "Lärartäthet och utbildning hos lärare är faktorer"
+
+if(is.na(data_personal$p_eleverperlarare_2022[data_personal$skolnamn == params$skolnamn]) & is.na(data_personal$p_eleverperlarare_2021[data_personal$skolnamn == params$skolnamn]) & is.na(data_personal$p_eleverperlarare_2020[data_personal$skolnamn == params$skolnamn])){
+  personal_besk <- "Utbildning hos lärare är en faktor"
+}
+if(is.na(data_personal$p_andellararleg_2022[data_personal$skolnamn == params$skolnamn]) & is.na(data_personal$p_andellararleg_2021[data_personal$skolnamn == params$skolnamn]) & is.na(data_personal$p_andellararleg_2020[data_personal$skolnamn == params$skolnamn]) & is.na(data_personal$p_andelhogskexamen_2022[data_personal$skolnamn == params$skolnamn]) & is.na(data_personal$p_andelhogskexamen_2021[data_personal$skolnamn == params$skolnamn]) & is.na(data_personal$p_andelhogskexamen_2020[data_personal$skolnamn == params$skolnamn])){
+  beskrivning <- "Lärartäthet är en faktor"
+}
+
+if(!is.na(data_personal$p_andellararleg_2022[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_andellararleg_2021[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_andellararleg_2020[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_andelhogskexamen_2022[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_andelhogskexamen_2021[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_andelhogskexamen_2020[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_eleverperlarare_2022[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_eleverperlarare_2021[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_eleverperlarare_2020[data_personal$skolnamn == params$skolnamn])){
+  cat("## Lärartäthet och lärarnas behörighet")
+}
+```
+
+`r if(!is.na(data_personal$p_andellararleg_2022[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_andellararleg_2021[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_andellararleg_2020[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_andelhogskexamen_2022[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_andelhogskexamen_2021[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_andelhogskexamen_2020[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_eleverperlarare_2022[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_eleverperlarare_2021[data_personal$skolnamn == params$skolnamn]) | !is.na(data_personal$p_eleverperlarare_2020[data_personal$skolnamn == params$skolnamn])){paste(personal_besk, "som påverkar skolans verksamhet och elevernas lärande. Här redovisas personalstatistik för lärare med heltidstjänst på", params$skolnamn, "i jämförelse med hela kommunen.", sep = " ")}`
+
+```{r figur personalstat, echo=FALSE, message = F, warning=F}
+tre_senaste_kalenderår <- c("20/21", "21/22", "22/23")
+kommunjfr <- c("Örebros kommunala skolor", "Örebro kommunala skolor", "Örebro fristående skolor")
+
+###OBS!!! "kommunjfr" är en variabel som skapades i pgm 00-02 och den inkluderar friskolorna. Det bör koden inte egentligen inte göra men just nu spelar det ingen roll i praktiken eftersom datafilen är tom.
+
+#två figurer här: elever per lärare och utbildning hos lärare
+
+gg <- data_personal %>%
+  filter(skolnamn %in% params$skolnamn | skolnamn %in% kommunjfr)  %>%
+  ungroup() %>%
+  select(skolnamn, p_eleverperlarare_2022, p_eleverperlarare_2021, p_eleverperlarare_2020) %>%
+  as.data.table() %>%
+  melt(id.vars = "skolnamn") %>%
+  mutate(id = as.factor(desc(row_number()))) %>% arrange(id) %>%
+  filter(value != 0) %>%
+  mutate(value = as.numeric(value)) %>%
+  mutate(year = str_sub(variable, -4, -1))
+
+fig_elever_per_larare <- ggplot(gg, aes(x=year, y=value, group=skolnamn, color=skolnamn)) +
+  geom_line() +
+  scale_x_discrete(labels = tre_senaste_kalenderår) +
+  scale_y_continuous(limits = c(0, max(gg$value)*1.2), breaks = seq(0, max(gg$value)*1.2, by = 2)) +
+  theme(axis.title.x = element_blank()) +
+  labs(y = "Antal elever per lärare")
+
+
+print(fig_elever_per_larare)
+
+
+gg <- data_personal %>%
+  filter(skolnamn %in% params$skolnamn | skolnamn %in% kommunjfr)  %>%
+  ungroup() %>%
+  select(skolnamn, p_andelhogskexamen_2022, p_andelhogskexamen_2021, p_andelhogskexamen_2020
+         , p_andellararleg_2022, p_andellararleg_2021, p_andellararleg_2020) %>%
+  as.data.table() %>%
+  na.exclude() %>% 
+  melt(id.vars = "skolnamn") %>%
+  mutate(id = as.factor(desc(row_number()))) %>% arrange(id) %>%
+  mutate(group = as.factor(case_when(variable == "p_andelhogskexamen_2022"~ "med pedagogisk högskoleex. -"
+                                     , variable == "p_andelhogskexamen_2021"~ "med pedagogisk högskoleex. -"
+                                     , variable == "p_andelhogskexamen_2020"~ "med pedagogisk högskoleex. -"
+                                     , TRUE ~ "med lärarleg. i minst ett ämne -"))) %>%
+  filter(value != 0) %>%
+  mutate(year = str_sub(variable, -4, -1))  %>%
+  mutate(group2 = paste(group, " ", skolnamn)) %>% 
+  mutate(value = as.numeric(value)) 
+
+
+fig_andel_larare_utb <- ggplot(gg, aes(year, value)) +
+  scale_x_discrete(labels = tre_senaste_kalenderår) +
+  geom_line(aes(colour = group2, group = str_wrap(group2, 10))) +
+  #geom_text(aes(label = round(value, 1)), colour = "black", vjust = -0.5, size = 2.5) + OBS! Adding this adds the data to the top.
+  #NB: GGREPEL is a package that will separate the numbers on the plot. I could not download the package on my R. Give it a try!
+  scale_fill_manual(values = färger) +
+  theme(axis.title.x = element_blank()
+        , legend.title=element_blank()) +
+  scale_y_continuous(labels = function(x) paste0(x, " %"), limits = c(0, 100)) +
+  scale_colour_discrete(labels = function(x) str_wrap(x, width = 35)) + 
+  labs(y = "% lärare med högskoleexamen/lärarlegitimation ")
+
+print(fig_andel_larare_utb)
+
+
+
+```
+
+```{r nöjdhet, echo=FALSE, message = F, warning=F, results = 'asis'}
+nojdhet <- "Elever och vårdnadshavare"
+
+if(is.na(data_elevnojdhet$nojd_vhs_ak3[data_personal$skolnamn == params$skolnamn]) & is.na(data_elevnojdhet$nojd_vhs_ak5[data_personal$skolnamn == params$skolnamn]) & is.na(data_elevnojdhet$nojd_vhs_ak8[data_personal$skolnamn == params$skolnamn])){
+  nojdhet <- "Elever"
+}
+
+if(is.na(data_elevnojdhet$nojd_elevs_ak3[data_personal$skolnamn == params$skolnamn]) & is.na(data_elevnojdhet$nojd_elevs_ak5[data_personal$skolnamn == params$skolnamn]) & is.na(data_elevnojdhet$nojd_elevs_ak8[data_personal$skolnamn == params$skolnamn])){
+  nojdhet <- "Vårdnadshavare"
+}
+
+#mening om kommunal/enskild
+huvudman <- NA
+if(data_elevnojdhet$huvudman[data_elevnojdhet$skolnamn == params$skolnamn] == "Kommunal"){
+  huvudman <- "kommunala skolor"
+}
+if(data_elevnojdhet$huvudman[data_elevnojdhet$skolnamn == params$skolnamn] == "Enskild"){
+  huvudman <- "friskolor"
+}
+  
+if(!is.na(data_elevnojdhet$nojd_vhs_ak3[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_vhs_ak5[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_vhs_ak8[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_elevs_ak3[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_elevs_ak5[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_elevs_ak8[data_personal$skolnamn == params$skolnamn])){
+  cat("## Nöjdhet hos elever och vårdnadshavare")
+}
+```
+
+`r if(!is.na(data_elevnojdhet$nojd_vhs_ak3[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_vhs_ak5[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_vhs_ak8[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_elevs_ak3[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_elevs_ak5[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_elevs_ak8[data_personal$skolnamn == params$skolnamn])){paste(nojdhet,"tillfrågas regelbundet genom enkäter om hur nöjda de är med skolan och dess verksamhet. Nedan ställs svaren för",params$skolnamn, "i relation till genomsnittet för", huvudman, "i", params$kommun, sep= " ")}`.
+
+```{r elevnöjdhet, echo=FALSE, message = F, warning=F}
+#Upplevd nöjdhet hos elever och vårdnadshavare
+ 
+ keep_cols <- data_elevnojdhet %>%
+   filter(skolnamn %in% params$skolnamn) %>%
+   mutate(across(where(is.character), ~na_if(., "0"))) %>%
+   select_if(~ !any(is.na(.)))
+  
+    gg <- data_elevnojdhet %>%
+   filter(skolnamn %in% params$skolnamn | skolnamn %in% kommunjfr)  %>%
+   select(-c(skolkod, huvudman)) %>%
+   melt(id.vars = "skolnamn") %>%
+   filter(variable %in% colnames(keep_cols)) %>%
+   filter(!is.na(value)) %>%
+   mutate(variable = case_when(variable == "nojd_vhs_ak3" ~ "Upplevd nöjdhet vårdnadshavare åk 3"
+          , variable == "nojd_vhs_ak5" ~ "Upplevd nöjdhet vårdnadshavare åk 5"
+          , variable == "nojd_vhs_ak8" ~ "Upplevd nöjdhet vårdnadshavare åk 8"
+          , variable == "nojd_elevs_ak3" ~ "Upplevd nöjdhet elever åk 3"
+          , variable == "nojd_elevs_ak5" ~ "Upplevd nöjdhet elever åk 5"
+          , variable == "nojd_elevs_ak8" ~ "Upplevd nöjdhet elever åk 8")) %>%
+   mutate(value = round(as.numeric(value), digits = 0))
+ 
+
+
+        
+     
+fig_nojdhet <- ggplot(gg, aes(skolnamn, value, fill=variable)) + 
+geom_col(position = "dodge") + 
+   scale_fill_manual(values = färger, guide = guide_legend(direction = "vertical", ncol = 2)) +
+   theme(axis.title.x = element_blank()) + 
+   geom_text(aes(label=paste0(round(value, 1), "%")), vjust=-0.5, position = position_dodge(0.9)) +
+   theme(axis.title.x = element_blank()
+            , legend.title = element_blank()
+            , legend.position = "bottom" 
+            , legend.text = element_text(size = 7)) +
+   scale_y_continuous(labels = function(x) paste0(x, " %"), limits = c(0, 100)) +
+   theme(axis.title.x = element_blank()
+         , axis.title.y = element_blank()
+         , legend.title=element_blank())
+
+
+ 
+ if(!is.na(data_elevnojdhet$nojd_vhs_ak3[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_vhs_ak5[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_vhs_ak8[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_elevs_ak3[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_elevs_ak5[data_personal$skolnamn == params$skolnamn]) | !is.na(data_elevnojdhet$nojd_elevs_ak8[data_personal$skolnamn == params$skolnamn])){
+   print(fig_nojdhet)
+ }
+```
+
+```{r läsförståelse, echo=FALSE, message = F, warning=F, fig.width=8, fig.height=12}
+
+if(!is.na(data_lasforst$f_2022[data_lasforst$skolnamn == params$skolnamn]) | 
+   !is.na(data_lasforst$f_2021[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$f_2020[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$t_2022[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$t_2021[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$t_2020[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$p_2022[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$p_2021[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$p_2020[data_lasforst$skolnamn == params$skolnamn]) ){
+  cat()
+}
+
+gg <- data_lasforst %>%
+   filter(skolnamn %in% params$skolnamn | skolnamn %in% kommunjfr)  %>%
+   select(-c(skolkod, "typ av huvudman", huvudman)) %>%
+   melt(id.vars = "skolnamn") %>%
+   filter(!is.na(value)) %>%
+   mutate(value = round(as.numeric(value), digits = 0)) %>%
+   mutate(year = str_sub(variable, start= -4)) %>%
+   mutate(gender = case_when(str_sub(variable, start = 1, end = 1) == "p" ~ "Pojkar"
+          , str_sub(variable, start = 1, end = 1) == "f" ~ "Flickor"
+          , str_sub(variable, start = 1, end = 1) == "t" ~ "Totalt")) %>%
+   mutate(group = paste0(skolnamn, " ", gender)) %>%
+   mutate(label = paste0(skolnamn, " ", gender))
+
+
+# Convert 'year' column to factor
+gg$year <- as.factor(gg$year)
+                      
+
+
+# For total data
+total_data <- gg %>% filter(gender == "Totalt")
+
+# For gender data
+gender_data <- gg %>% filter(gender != "Totalt")
+
+
+# Create the first graph for total data
+plot1 <- ggplot(total_data, aes(x=year, y=value, color=group)) +
+  geom_point() + # Add this line
+  geom_line(aes(group = group)) + # And modify this line
+  #scale_x_discrete(breaks = unique(total_data$year)) +
+  scale_x_discrete(labels = tre_senaste_kalenderår) +
+  scale_y_continuous(labels = function(x) percent(x/100), limits = c(0, NA)) +
+  labs(title="Åk 1 - % läskunniga elever", x="År", y=NULL) +
+  theme_minimal() + 
+  theme(legend.title=element_blank()) + 
+  scale_color_brewer(palette="Dark2")
+
+
+# Create a new variable 'label' for labeling purpose
+
+
+# Create the second graph for gender data
+plot2 <- ggplot(gender_data, aes(x=year, y=value, color=label)) +
+  geom_point() + # Add this line
+  geom_line(aes(group = group)) + # And modify this line
+  scale_x_discrete(labels = tre_senaste_kalenderår) +
+  #scale_x_discrete(breaks = unique(gender_data$year)) +
+  scale_y_continuous(labels = function(x) percent(x/100), limits = c(0, NA)) +
+  labs(title="Flickor mot pojkar läskunniga", x="År", y=NULL) +
+  theme_minimal() +
+  theme(legend.title=element_blank()) + 
+  scale_color_brewer(palette="Dark2")
+
+plots <- list()
+
+
+
+if(!is.na(data_lasforst$t_2022[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$t_2021[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$t_2020[data_lasforst$skolnamn == params$skolnamn]) ){
+   plots <- c(plots, list(plot1))
+}
+
+if(!is.na(data_lasforst$f_2022[data_lasforst$skolnamn == params$skolnamn]) | 
+   !is.na(data_lasforst$f_2021[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$f_2020[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$p_2022[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$p_2021[data_lasforst$skolnamn == params$skolnamn]) |
+   !is.na(data_lasforst$p_2020[data_lasforst$skolnamn == params$skolnamn]) ){
+   plots <- c(plots, list(plot2))
+}
+
+if (length(plots) > 0) {
+  do.call("grid.arrange", c(plots, ncol=1)) 
+  }
+
+```
+
+```{r np 3, echo=FALSE, message = F, warning=F, results="asis", fig.align='center', fig.height=4}
+
+#rubrik
+if(any(!is.na(data_ak_3_np$andel_godk_ma_tot[data_ak_3_np$skolnamn == params$skolnamn]))  
+   | any(!is.na(data_ak_3_np$andel_godk_sve[data_ak_3_np$skolnamn == params$skolnamn])) 
+   | any(!is.na(data_ak_3_np$andel_godk_sva[data_ak_3_np$skolnamn == params$skolnamn])) 
+){
+  cat("## År 3 - Genomsnittlig andel godkända elever per delprov i de nationella proven")
+}
+
+#figur åk 3
+gg <- data_ak_3_np %>%
+  filter(skolnamn %in% params$skolnamn | skolnamn %in% kommunjfr) %>%
+  filter(Kön == "Totalt") %>%
+  select(skolnamn, andel_godk_ma, andel_godk_sve, andel_godk_sva) %>%
+  melt(id.vars = "skolnamn") %>%
+  mutate(subject = case_when(str_sub(variable, -2 , -1) == "ma" ~ "Matematik"
+                             , str_sub(variable, -2 , -1) == "ve" ~ "Svenska"
+                           , str_sub(variable, -2 , -1) == "va" ~ "SvA")) %>%
+  mutate(dropsva = case_when(skolnamn %in% params$skolnamn& is.na(value) & subject == "SvA" ~ 1
+                             , .default = 0)) %>%
+  filter(!(subject == "SvA" & sum(dropsva) == 1))
+  
+
+
+# Convert 'value' to numeric. Otherwise, error message.
+gg$value <- as.numeric(gg$value)
+
+fig_ak_3_np <- ggplot(gg, aes(x=subject, y=value, fill=str_wrap(skolnamn, 5), colour = str_wrap(skolnamn, 5))) +
+  geom_bar(stat="identity", position=position_dodge()) +
+  geom_text(aes(label=paste0(round(value * 100, 1), "%")), colour = "black", vjust=-0.5, position = position_dodge(0.9)) +
+  theme(axis.title.x = element_blank()
+        , legend.title = element_blank()
+        , legend.position = "bottom") +
+  labs(y = "Godkända %") +
+  scale_y_continuous(labels = function(x) paste0(x * 100, " %"), limits = c(0, 1.1), expand = c(0, 0)) + ggtitle('Åk 3')
+
+
+if(any(!is.na(data_ak_3_np$andel_godk_ma[data_ak_3_np$skolnamn == params$skolnamn])) | 
+   any(!is.na(data_ak_3_np$andel_godk_sve[data_ak_3_np$skolnamn == params$skolnamn])) | 
+   any(!is.na(data_ak_3_np$andel_godk_sva[data_ak_3_np$skolnamn == params$skolnamn])))
+{
+  print(fig_ak_3_np)
+}
+
+
+
+```
+
+```{r np 6, echo=FALSE, message = F, warning=F, results="asis", fig.align='center', fig.height=4}
+
+#rubrik för Åk 6
+if(any(!is.na(data_ak_6_np$godk_np_ma[data_ak_6_np$skolnamn == params$skolnamn]))  
+   | any(!is.na(data_ak_6_np$godk_np_sv[data_ak_6_np$skolnamn == params$skolnamn])) 
+   | any(!is.na(data_ak_6_np$godk_np_sva[data_ak_6_np$skolnamn == params$skolnamn]))
+   | any(!is.na(data_ak_6_np$godk_np_en[data_ak_6_np$skolnamn == params$skolnamn])) 
+){
+  cat("## År 6 - Genomsnittlig andel godkända elever per delprov i de nationella proven")
+}
+
+#figur åk 6
+
+if(any(data_ak_6_np$skolnamn %in% params$skolnamn)) {
+  gg <- data_ak_6_np %>%
+    filter(skolnamn %in% params$skolnamn | skolnamn %in% kommunjfr) %>%
+    mutate(godk_np_sva = na_if(godk_np_sva, "..")) %>%
+    select_if(~ !any(is.na(.))) %>%
+    melt(id.vars = "skolnamn") %>%
+    mutate(subject = case_when(str_sub(variable, -2 , -1) == "ma" ~ "Matematik"
+                                  , str_sub(variable, -2 , -1) == "sv" ~ "Svenska"
+                                  , str_sub(variable, -2 , -1) == "va" ~ "SvA"
+                                  , str_sub(variable, -2 , -1) == "en" ~ "Engelska")) %>%
+    mutate(dropsva = case_when(skolnamn %in% params$skolnamn& is.na(value) & subject == "SvA" ~ 1
+                               , .default = 0)) %>%
+    filter(!(subject == "SvA" & sum(dropsva) == 1))
+}
+
+
+
+
+# Convert 'value' to numeric. Otherwise, error message.
+ gg$value <- as.numeric(gg$value)
+ 
+fig_ak_6_np <- ggplot(gg, aes(x=subject, y=value, fill=str_wrap(skolnamn, 5), colour = str_wrap(skolnamn, 5))) +
+      geom_bar(stat="identity", position=position_dodge()) +
+      geom_text(aes(label=paste0(round(value * 100, 1), "%")), colour = "black", vjust=-0.5, position = position_dodge(0.9)) +
+      theme(axis.title.x = element_blank()
+            , legend.title = element_blank()
+            , legend.position = "bottom") +
+      labs(y = "Godkända %") +
+      scale_y_continuous(labels = function(x) paste0(x * 100, " %"), limits = c(0, 1.1), expand = c(0, 0)) + ggtitle('Åk 6')
+
+
+
+if(any(!is.na(data_ak_6_np$godk_np_ma[data_ak_6_np$skolnamn == params$skolnamn]))  
+   | any(!is.na(data_ak_6_np$godk_np_sv[data_ak_6_np$skolnamn == params$skolnamn])) 
+   | any(!is.na(data_ak_6_np$godk_np_sva[data_ak_6_np$skolnamn == params$skolnamn]))
+   | any(!is.na(data_ak_6_np$godk_np_en[data_ak_6_np$skolnamn == params$skolnamn])) 
+){
+  print(fig_ak_6_np)
+}
+
+
+
+
+```
+
+```{r np 9, echo=FALSE, message = F, warning=F, results="asis", fig.align='center'}
+
+#betyg ak 9
+
+#rubrik för Åk 9
+if(any(!is.na(data_ak_9_np$godk_np_ma[data_ak_9_np$skolnamn == params$skolnamn]))  
+   | any(!is.na(data_ak_9_np$godk_np_en[data_ak_9_np$skolnamn == params$skolnamn])) 
+   | any(!is.na(data_ak_9_np$godk_np_sv[data_ak_9_np$skolnamn == params$skolnamn]))
+   | any(!is.na(data_ak_9_np$godk_np_sva[data_ak_9_np$skolnamn == params$skolnamn]))
+   | any(!is.na(data_ak_9_np$godk_np_no[data_ak_9_np$skolnamn == params$skolnamn])) 
+   | any(!is.na(data_ak_9_np$godk_np_so[data_ak_9_np$skolnamn == params$skolnamn]))
+   | any(!is.na(data_ak_9_np$godk_np_alla[data_ak_9_np$skolnamn == params$skolnamn]))
+){
+  cat("## År 9 - Genomsnittlig andel godkända elever per delprov i de nationella proven")
+}
+
+
+
+#figur åk 9
+
+if(any(data_ak_9_np$skolnamn %in% params$skolnamn)) {
+  gg <- data_ak_9_np %>%
+    filter(skolnamn %in% params$skolnamn | skolnamn %in% kommunjfr) %>%
+    select_if(~ !any(is.na(.))) %>%
+    melt(id.vars = "skolnamn") %>%
+    mutate(subject = as.factor(case_when(str_sub(variable, -2 , -1) == "ma" ~ "Matematik"
+                               , str_sub(variable, -2 , -1) == "sv" ~ "Svenska"
+                               , str_sub(variable, -2 , -1) == "va" ~ "SvA"
+                               , str_sub(variable, -2 , -1) == "en" ~ "Engelska"
+                               , str_sub(variable, -2 , -1) == "so" ~ "SO"
+                               , str_sub(variable, -2 , -1) == "no" ~ "NO"
+                               , str_sub(variable, -2 , -1) == "la" ~ "Samtliga ämnen")))
+  
+  
+}
+
+
+      
+      
+      
+          
+gg$value <- as.numeric(gg$value)
+fig_ak_9_np <-   ggplot(gg, aes(x=subject, y=value, fill=str_wrap(skolnamn, 5), colour = str_wrap(skolnamn, 5))) +
+      geom_bar(stat="identity", position=position_dodge(0.9), width = 0.8) +
+     geom_text(aes(label=paste0(round(value, 1), "%")), colour = "black", vjust=-0.5, position = position_dodge(0.9), size = 2.5) + # Adds data labels on barplots. Adjust size.
+      theme(axis.title.x = element_blank()
+            , legend.title = element_blank()
+            , legend.position = "bottom") +
+      labs(y = "Godkända %") +
+      scale_y_continuous(labels = function(x) paste0(x, " %"), limits = c(0, max(gg$value)*1.2), expand = c(0, 0)) + ggtitle('Åk 9')
+
+
+
+if(any(!is.na(data_ak_9_np$godk_np_ma[data_ak_9_np$skolnamn == params$skolnamn]))  
+   | any(!is.na(data_ak_9_np$godk_np_en[data_ak_9_np$skolnamn == params$skolnamn])) 
+   | any(!is.na(data_ak_9_np$godk_np_sv[data_ak_9_np$skolnamn == params$skolnamn]))
+   | any(!is.na(data_ak_9_np$godk_np_sva[data_ak_9_np$skolnamn == params$skolnamn]))
+   | any(!is.na(data_ak_9_np$godk_np_no[data_ak_9_np$skolnamn == params$skolnamn])) 
+   | any(!is.na(data_ak_9_np$godk_np_so[data_ak_9_np$skolnamn == params$skolnamn]))
+   | any(!is.na(data_ak_9_np$godk_np_alla[data_ak_9_np$skolnamn == params$skolnamn]))
+){
+  print(fig_ak_9_np)
+}
+
+
+
+```
